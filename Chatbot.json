@@ -1,0 +1,253 @@
+{
+  "name": "My workflow 2",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "return {\n  json: {\n    message: \"Sorry, I can only provide weather-related information.\"\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -600,
+        320
+      ],
+      "id": "200354f3-96e5-4cd2-999e-874e03c04372",
+      "name": "Return Not Weather Message"
+    },
+    {
+      "parameters": {
+        "toolDescription": "Fetch current temperature for given coordinates.",
+        "url": "https://api.open-meteo.com/v1/forecast",
+        "sendQuery": true,
+        "parametersQuery": {
+          "values": [
+            {
+              "name": "latitude"
+            },
+            {
+              "name": "longitude"
+            },
+            {
+              "name": "forecast_days",
+              "valueProvider": "fieldValue",
+              "value": "1"
+            },
+            {
+              "name": "hourly",
+              "valueProvider": "fieldValue",
+              "value": "temperature_2m"
+            }
+          ]
+        }
+      },
+      "id": "bc08e99b-1eee-4e8b-a0b1-6b7f92fa3036",
+      "name": "Weather HTTP Request",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "position": [
+        -40,
+        300
+      ],
+      "notesInFlow": true,
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "model": "llama3.2:latest",
+        "options": {}
+      },
+      "id": "549f0d42-9b22-4c30-a629-a27a7c90c778",
+      "name": "Ollama Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "position": [
+        -300,
+        280
+      ],
+      "typeVersion": 1,
+      "credentials": {
+        "ollamaApi": {
+          "id": "xHuYe0MDGOs9IpBW",
+          "name": "Local Ollama service"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionKey": ""
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.3,
+      "position": [
+        -160,
+        300
+      ],
+      "id": "56ec4352-029a-4641-b4f4-97b5fdbec72c",
+      "name": "Postgres Chat Memory",
+      "credentials": {
+        "postgres": {
+          "id": "Vs9CXLdnGqFF2CEM",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.message }}",
+        "options": {
+          "systemMessage": "=You are a weather-only assistant. You must only answer questions related to weather. For any other kind of question, respond with: \"Sorry, I can only provide weather information.\" Use the weather tool to fetch the current and forecasted weather. First, identify the location and its latitude/longitude if needed. Ignore any non-weather-related topics."
+        }
+      },
+      "id": "96362e76-5b3c-4e28-b09b-159fea894bb4",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "position": [
+        -300,
+        60
+      ],
+      "typeVersion": 1.6,
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.allowed }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -800,
+        100
+      ],
+      "id": "64b764a8-ee66-4f1f-a9f9-f8363df6527d",
+      "name": "Is Weather Related?"
+    },
+    {
+      "parameters": {
+        "jsCode": "const rawInput = $json[\"input\"] || \"\";\nconst msg = rawInput.toLowerCase();\nconst weatherKeywords = [\"weather\", \"temperature\", \"forecast\", \"rain\", \"snow\", \"wind\", \"sunny\", \"cold\", \"hot\"];\nconst isWeatherRelated = weatherKeywords.some(keyword => msg.includes(keyword));\nreturn { json: { allowed: isWeatherRelated, message: rawInput, sessionId: $json.sessionId || 'manual-session' } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1000,
+        60
+      ],
+      "id": "438495d8-e2a5-4453-b624-00691cbefe15",
+      "name": "Check Weather Keywords"
+    },
+    {
+      "parameters": {},
+      "id": "c7909011-6ecc-44ce-8d82-e86c438fdb8c",
+      "name": "On new manual Chat Message",
+      "type": "@n8n/n8n-nodes-langchain.manualChatTrigger",
+      "position": [
+        -1340,
+        120
+      ],
+      "typeVersion": 1
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Postgres Chat Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Weather HTTP Request": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Weather Related?": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Not Weather Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Weather Keywords": {
+      "main": [
+        [
+          {
+            "node": "Is Weather Related?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On new manual Chat Message": {
+      "main": [
+        [
+          {
+            "node": "Check Weather Keywords",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "3593d2ef-bef9-4b94-b7c9-cfcb05bca4e7",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "558d88703fb65b2d0e44613bc35916258b0f0bf983c5d4730c00c424b77ca36a"
+  },
+  "id": "Qg35YV1fgTHdSFJ2",
+  "tags": []
+}
